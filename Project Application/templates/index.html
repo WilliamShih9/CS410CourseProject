@@ -1,0 +1,669 @@
+
+<!DOCTYPE html>
+<head>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-annotation/2.5.1/d3-annotation.min.js"></script>
+<style>
+
+h1 {
+    font-family: 'Verdana', sans-serif;
+    font-size: 30px;
+    font-weight: lighter;
+    letter-spacing: 1px;
+    line-height: 1;
+    text-align: center;
+    background-color: #ccffcc;
+    padding: 10px;
+}
+
+p {
+   word-wrap: break-word;
+   text-align: left;		
+   width:90%;
+   max-width: 1500px;
+   margin:0 auto;
+   line-height: 1.6;
+}
+
+input {
+	display: block;
+	width: 50%;
+	font-size: 17px;
+    padding: 3px 4px; /* Some padding */
+    margin-bottom: 10px;
+}
+
+label {
+	float: left;
+	display: block;
+    padding: 5px;
+	font-size: 17px;
+}
+
+
+div.tooltip {	
+    position: absolute;			
+    text-align: center;			
+    padding: 2px;				
+    font: 15px sans-serif;		
+    background: lightsteelblue;	
+    border: 0px;		
+    border-radius: 8px;			
+    pointer-events: none;			
+}
+
+
+
+
+.bgroup button {
+  background-color: #04AA6D; 
+  border: 1px solid green; 
+  font: 16px sans-serif;		
+  color: black; 
+  padding: 10px 14px; 
+  cursor: pointer; 
+}
+
+
+input[type=submit] {
+	width: 160px;
+    height: 32px;
+	font-size: 17px;
+    padding: 4px 4px; /* Some padding */
+    margin-bottom: 20px;
+}
+
+
+</style>
+</head>
+<body onload="init()">
+
+<h1>Interactive Sentiment Analysis of Twitter</h1>
+
+
+<p>This project provides an interactive visualization of sentiment analysis of tweets. VADER and TextBlob are pre-traied models used to perform the sentiment analysis. </br>
+VADER (Valence Aware Dictionary and sEntiment Reasoner) and TextBlob are lexicon and rule-based analysis tools that can measure sentiment.</br>
+Four scores are provided for VADER: compound, negative, neutral, and positive scores.</br>
+The VADER compound score is the overall sentiment. Two scores are provided for TextBlob: polarity and subjectivity. </br>
+Subjectivity measures how fact based or opinion based text is and TextBlob polarity is again the overall sentiment.</br>
+Four different queries are required before pressing submit (no empty queries allowed). Two types of queries are allowed.</br>
+Type "query:" and then the query for searching for all tweets containing the following text (tweets will be filtered to be in English). Tweets from up to 7 days ago are allowed here. No quotes allowed.</br>
+Type "user:" and then the Twitter username for searching for all tweets from the Twitter username. Up to 1000 tweets will be obtained.</br>
+Pre-calculated queries are provided in the dropdown menus below. "Baseline" and "NLTKBaseline" are given to provide how certain users or queries' sentiments may differ from Twitter overall.</br>
+There will be a stacked bar chart for each of the 6 scores. Hover over the bars to see more information. The number of tweets collected and timestamps can be found below the chart.</br>
+</p>
+
+
+
+<form action="get_data" method="post" onsubmit="return submit_form();">
+  <label for="list1choice">One:</label>
+  <input list="list1" id="list1choice" name="list1choice">
+  <datalist id="list1"></datalist>
+
+  <label for="list5choice">Two:</label>
+  <input list="list5" id="list5choice" name="list5choice">
+  <datalist id="list5"></datalist>
+
+  <label for="list3choice">Three:</label>
+  <input list="list3" id="list3choice" name="list3choice">
+  <datalist id="list3"></datalist>
+
+  <label for="list4choice">Four:</label>
+  <input list="list4" id="list4choice" name="list4choice">
+  <datalist id="list4"></datalist>
+  
+  <input id="submitbutton" type="submit" value="Submit">
+</form>
+
+<p id="errormessage" hidden = "hidden"></p>
+
+<div id="chartarea" style="display: none;">
+
+<div class="bgroup" id="buttons" style="text-align:center;">
+    <button id="compound">VADAR Compound</button>
+    <button id="neg">VADAR Negative</button>
+    <button id="neu">VADAR Neutral</button>
+    <button id="pos">VADAR Positive</button>
+    <button id="polarity">TextBlob Polarity</button>
+    <button id="subjectivity">TextBlob Subjectivity</button>
+</div>
+
+<div style="text-align:center;">
+<svg>
+
+</svg>
+
+<p id="bottomtext"></p>
+</div>
+
+</div>
+
+
+<script>
+
+
+function set_all(unselected){
+    d3.select("#compound").style('background-color', unselected);
+    d3.select("#neg").style('background-color', unselected);
+    d3.select("#neu").style('background-color', unselected);
+    d3.select("#pos").style('background-color', unselected);
+    d3.select("#subjectivity").style('background-color', unselected);
+    d3.select("#polarity").style('background-color', unselected);
+}
+
+
+async function init(){
+
+	var unselected = "#04AA6D";
+	var selected = "#99ccee";
+	
+	var tooltip = d3.select("body").append("div")
+		.attr("class", "tooltip")
+		.style("opacity", 0);
+	
+    options = ["Baseline","NLTKBaseline","query:abortion","query:America","query:California","query:CEO","query:China","query:climate change","query:climate warming",
+	"query:conservatives","query:Democrats","query:Donald Trump","query:Florida","query:immigrants","query:inflation",     
+	"query:Joe Biden","query:liberals","query:nuclear energy","query:oil price","query:president","query:Qatar","query:Republicans","query:Russia","query:San Francisco","query:solar energy","query:Tesla",
+	"query:Texas","query:Toyota","query:Ukraine","user:AOC","user:AP","user:BarackObama","user:BBCBreaking","user:BBCWorld","user:BernieSanders","user:BillGates","user:BreitbartNews","user:business",
+	"user:charliekirk11","user:chrislhayes","user:ClimateHuman","user:CNN","user:DeItaone","user:DonaldJTrumpJr","user:DougJBalloon","user:FoxNews","user:FT","user:GOP","user:GovRonDeSantis",
+	"user:GretaThunberg","user:JoeBiden","user:KellyannePolls","user:KingJames","user:KyrieIrving","user:mattyglesias","user:MrBeast","user:Nate_Cohn","user:NateSilver538","user:NHC_Atlantic","user:Noahpinion",
+	"user:nytimes","user:OANN","user:RBReich","user:realDonaldTrump","user:seanhannity","user:SenWarren","user:tedcruz","user:Twitter","user:unusual_whales","user:WSJ","user:YouTube"];
+	
+	d3.select('#list1')
+		.selectAll('option')
+		.data(options)
+		.enter()
+		.append('option')
+		.attr("value", function (d) { return d; });
+	
+	d3.select('#list5')
+		.selectAll('option')
+		.data(options)
+		.enter()
+		.append('option')
+		.attr("value", function (d) { return d; });
+	
+	d3.select('#list3')
+		.selectAll('option')
+		.data(options)
+		.enter()
+		.append('option')
+		.attr("value", function (d) { return d; });
+	
+	d3.select('#list4')
+		.selectAll('option')
+		.data(options)
+		.enter()
+		.append('option')
+		.attr("value", function (d) { return d; });
+		
+	var meta_data = {{meta_data_sentiment | tojson}};
+	var data = {{data_sentiment | tojson}};
+	var selected_items = {{ selected_items | tojson}};
+
+	async function draw_graph(meta_data, data, type){
+	
+		var margin = 120;
+		var width = 750;
+		var height = 500;
+		d3.select("svg").selectAll('*').remove();
+		
+		
+		
+		var keys = [meta_data[0].author, meta_data[1].author, meta_data[2].author, meta_data[3].author];
+		var means = [meta_data[0][type], meta_data[1][type], meta_data[2][type], meta_data[3][type]];
+		var count = [meta_data[0].count, meta_data[1].count, meta_data[2].count, meta_data[3].count];
+		
+		
+		var keys_map = new Map([[keys[0], 0],[keys[1], 1],[keys[2], 2], [keys[3], 3]]);
+		var keys_label = [0,0,0,0];
+		
+		for (let i = 0; i < 4; i++){
+			count[i] = "n = " + count[i];
+		}
+		if (type == "compound" || type == "polarity"){
+			y_labels = ["-1.0","-0.9","-0.8","-0.7","-0.6","-0.5","-0.4","-0.3","-0.2","-0.1","0.0","0.1","0.2","0.3","0.4","0.5","0.6","0.7","0.8","0.9"];
+		}
+		else{
+			y_labels = ["0.0","0.1","0.2","0.3","0.4","0.5","0.6","0.7","0.8","0.9"];
+		}
+		var y_labels_map = new Map();
+		for (let i = 0; i < y_labels.length; i++){
+			y_labels_map.set(y_labels[i], i);
+		}
+		var cum_sum = [];
+		var cum_sum_negative = [];
+		for (let i = 0; i < 4; i++){
+			temp = [];
+			temp_negative = [];
+			total = 0;
+			for (const label of y_labels){
+				temp.push(Number(total * 100).toFixed(2).toString() + "%");
+				total = total + data[i][label];
+				temp_negative.push(Number(100 - (total * 100)).toFixed(2).toString() + "%");
+			}
+			cum_sum.push(temp);
+			cum_sum_negative.push(temp_negative);
+		}
+		console.log(cum_sum);
+		console.log(cum_sum_negative);
+		stackedData = d3.stack().keys(y_labels)(data);
+		
+		
+		var y = d3.scaleBand()
+			.domain(keys)
+			.range([0, height])
+			.paddingInner(0.2)
+			.align(0.1);
+		
+		
+		var y_quasi = d3.scaleBand()
+			.domain(count)
+			.range([10, height+10])
+			.paddingInner(0.2)
+			.align(0.1);
+			
+			
+		var x = d3.scaleLinear([0,1])
+			.range([0, width]);
+		
+		
+		function toColor(num) {
+			num >>>= 0;
+			var b = num & 0xFF,
+				g = (num & 0xFF00) >>> 8,
+				r = (num & 0xFF0000) >>> 16;
+			return "rgb(" + [r, g, b].join(",") + ")";
+		}
+		if (type == 'neu'){	
+			colors = ['rgb(247,251,255)','rgb(247,251,255)','rgb(222,235,247)','rgb(198,219,239)','rgb(158,202,225)','rgb(107,174,214)','rgb(66,146,198)','rgb(33,113,181)','rgb(8,81,156)','rgb(8,48,107)'];
+		}
+		else if (type == 'neg'){
+			colors = ['rgb(255,245,240)','rgb(254,224,210)','rgb(252,187,161)','rgb(252,146,114)','rgb(251,106,74)','rgb(239,59,44)','rgb(203,24,29)','rgb(165,15,21)','rgb(103,0,13)', 'rgb(103,0,13)'];
+		}
+		else if (type == 'pos'){
+			colors = ['rgb(255,255,229)','rgb(255,247,188)','rgb(254,227,145)','rgb(254,196,79)','rgb(254,153,41)','rgb(236,112,20)','rgb(204,76,2)','rgb(153,52,4)','rgb(102,37,6)','rgb(102,37,6)']
+		}
+		else if (type == 'compound'){
+			colors = [0x1f77b4, 0xaec7e8,0xff7f0e, 0xffbb78,0x2ca02c, 0x98df8a,0xd62728, 0xff9896,0x9467bd, 0xc5b0d5,0x8c564b, 0xc49c94,0xe377c2, 
+			0xf7b6d2,0x7f7f7f, 0xc7c7c7,0xbcbd22, 0xdbdb8d,0x17becf, 0x9edae5];
+			for (let i = 0; i < 20; i++){
+				colors[i] = toColor(colors[i]);
+			}
+		}
+		else if (type == 'polarity'){
+			colors = [0x1f77b4, 0xaec7e8,0xff7f0e, 0xffbb78,0x2ca02c, 0x98df8a,0xd62728, 0xff9896,0x9467bd, 0xc5b0d5,0x8c564b, 0xc49c94,0xe377c2, 
+			0xf7b6d2,0x7f7f7f, 0xc7c7c7,0xbcbd22, 0xdbdb8d,0x17becf, 0x9edae5];
+			for (let i = 0; i < 20; i++){
+				colors[i] = toColor(colors[i]);
+			}
+		}
+		else if (type == 'subjectivity'){
+			colors = ['rgb(255,255,255)','rgb(240,240,240)','rgb(217,217,217)','rgb(189,189,189)','rgb(150,150,150)','rgb(115,115,115)','rgb(82,82,82)','rgb(37,37,37)','rgb(0,0,0)','rgb(0,0,0)'];
+		}
+		map_colors = new Map();
+		if (colors.length == 20){
+			for(let i = 0; i < 19; i++){
+				map_colors.set(colors[i], y_labels[i] + " to " + y_labels[i+1]);
+			}
+			map_colors.set(colors[19], "0.9 to 1.0");
+		}
+		else if (colors.length == 10){
+			for(let i = 0; i < 9; i++){
+				map_colors.set(colors[i], y_labels[i] + " to " + y_labels[i+1]);
+			}
+			map_colors.set(colors[9], "0.9 to 1.0");
+		}
+		console.log(colors);
+		var color = d3.scaleOrdinal(y_labels).range(colors);
+		
+		d3.select("svg")
+            .attr("width", width + 2*margin)
+            .attr("height", height + 2*margin);
+			
+		// X Gridlines
+        d3.select("svg").append("g")
+            .attr("class", "grid")
+            .attr("transform","translate("+margin+","+(height+margin)+")")
+            .call(d3.axisBottom(x).tickSize(-height).tickFormat('').ticks(10));
+          
+        // Y Gridlines
+        d3.select("svg").append("g")
+            .attr("class", "grid")
+            .attr("transform","translate("+margin+","+margin+")")
+            .call(d3.axisLeft(y).tickSize(-width).tickFormat('').ticks(10));
+        
+        // Y Axis
+        d3.select("svg").append("g")
+            .style("font-size","12px")
+            .attr("transform","translate("+margin+","+margin+")")
+            .call(d3.axisLeft(y).tickSize(0));
+
+		// X Axis
+        d3.select("svg").append("g")
+            .style("font-size","15px")
+            .attr("transform","translate("+margin+","+(height+margin)+")")
+            .call(d3.axisBottom(x));
+		
+		
+		type_alt = "";
+		if (type == "neu"){
+			type_alt = "VADAR Neutral score";
+		}
+		else if (type == "neg"){
+			type_alt = "VADAR Negative score";
+		}
+		else if (type == "compound"){
+			type_alt = "VADAR polarity score";
+		}
+		else if (type == "polarity"){
+			type_alt = "TextBlob polarity score";
+		}
+		else if (type == "subjectivity"){
+			type_alt = "TextBlob subjectivity score";
+		}
+		else if (type == "pos"){
+			type_alt = "VADAR Positive score";
+		}
+		
+		title = "Chart of " + type_alt  + " for " + meta_data[0].author + ", " + meta_data[1].author + ", " + meta_data[2].author + ", " + meta_data[3].author;
+		
+		x_axis_label = "Cumulative Proportion of " + type;
+		y_axis_label = "Proportion";
+		 // Text Label X Axis
+        d3.select("svg").append("text")             
+          .attr("transform",
+                "translate(" + ((width+margin)/2) + " ," + 
+                               (height + 2*margin - 80) + ")")
+          .style("font-size","17px")
+          .style("text-anchor", "middle")
+          .text(x_axis_label);   
+         
+        // text label for the y axis
+        d3.select("svg").append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("y", 0)
+          .attr("x" ,0 - ((height + margin) / 2))
+          .attr("dy", "1em")
+          .style("font-size","17px")
+          .style("text-anchor", "middle")
+          .text(y_axis_label);  
+        
+        // Title
+        d3.select("svg").append("text")
+            .attr("transform", "translate("+margin+","+margin+")")
+            .attr("x", (width / 2))             
+            .attr("y", 0 - (margin / 2))
+            .attr("text-anchor", "middle")  
+            .style("font-size", "22px") 
+            .text(title);
+		
+				
+		// Tooltip
+		
+		var mouseover = function(event, d) {		
+				var y_label_name = d3.select(this.parentNode).datum().key;
+				var author_name = d.data["author"];
+				var index_author = keys_map.get(author_name);
+				var current_value = Number((d[1] - d[0]) * 100).toFixed(2).toString() + "%";
+				var cum_sum_value = cum_sum[index_author][y_labels_map.get(y_label_name)];
+				var cum_negative_value = cum_sum_negative[index_author][y_labels_map.get(y_label_name)];
+				var color_meaning = map_colors.get(color(y_label_name));
+				var mean =  Number(meta_data[index_author][type]).toFixed(3).toString();
+				var characters = Number(meta_data[index_author]['length']).toFixed(2).toString();
+                tooltip.transition()		
+                    .duration(200)		
+                    .style("opacity", 1.0);		
+                tooltip.html("Proportion of " + author_name + " in " + color_meaning + ": " + current_value + "<br>" + "Under " + y_label_name + ": " + cum_sum_value + 
+							"<br>" + "Above " + color_meaning + ": " + cum_negative_value +
+							"<br>" + "Mean " + type_alt + " of " + author_name + ": " + mean +
+							"<br>" + "Mean number of characters per tweet: " + characters)
+                    .style("left", (event.pageX + 10) + "px")		
+                    .style("top", (event.pageY - 60) + "px");	
+            };			
+        var mousemove = function(event, d){
+                tooltip
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 60) + "px");
+			};
+        var mouseout = function(event, d) {		
+                tooltip.transition()		
+                    .duration(500)		
+                    .style("opacity", 0);	
+            };
+		d3.select("svg").append("g")
+			.selectAll("g")
+			.data(stackedData)
+			.enter().append("g")
+			  .attr("fill", function(d) { return color(d.key); })
+			  .attr('stroke', "black")
+			  .attr('stroke-width', 1)
+			.selectAll("rect")
+			.data(function(d) { return d; })
+			.enter().append("rect")
+			  .attr("transform", "translate(" +margin+ "," +margin+ ")")
+			  .attr("y", function(d) { return y(d.data.author); })	    
+			  .attr("x", function(d) { return x(d[0]); })			    
+			  .attr("width", function(d) { return x(d[1]) - x(d[0]); })	
+			  .attr("height", y.bandwidth())	
+				.on("mouseover", mouseover)
+				.on("mousemove", mousemove)
+				.on("mouseout", mouseout);
+
+		// Add one dot in the legend for each name.
+		var size = 20
+		d3.select("svg").selectAll("mydots")
+		  .data(colors)
+		  .enter()
+		  .append("rect")
+			.attr("x", width + 140)
+			.attr("y", function(d,i){ return 150 + i*(size+5)}) // 100 is where the first dot appears. 25 is the distance between dots
+			.attr("width", size)
+			.attr("height", size)
+			.style("fill", function(d){ return color(d);})
+
+		// Add one dot in the legend for each name.
+		d3.select("svg").selectAll("mylabels")
+		  .data(colors)
+		  .enter()
+		  .append("text")
+			.attr("x", width + 140 + size*1.2)
+			.attr("y", function(d,i){ return 150 + i*(size+5) + (size/2)}) // 100 is where the first dot appears. 25 is the distance between dots
+			.style("fill", "black")
+			.text(function(d){ return map_colors.get(d);})
+			.attr("text-anchor", "left")
+			.style("alignment-baseline", "middle")
+			
+		
+		notes = "Notes: Tweets for " + meta_data[0]['author'] + " include " + meta_data[0]['count'] + " tweets from " + meta_data[0]['start_time'] + " and " + meta_data[0]['end_time'] + ".<br>" +
+			"Tweets for " + meta_data[1]['author'] + " include " +  meta_data[1]['count'] + " tweets from " +meta_data[1]['start_time'] + " and " + meta_data[1]['end_time'] + ".<br>" +
+			"Tweets for " + meta_data[2]['author'] + " include " +  meta_data[2]['count'] + " tweets from " + meta_data[2]['start_time'] + " and " + meta_data[2]['end_time'] + ".<br>" +
+			"Tweets for " + meta_data[3]['author'] + " include " +  meta_data[3]['count'] + " tweets from " + meta_data[3]['start_time'] + " and " + meta_data[3]['end_time'] + ".<br>" +
+			"Tweet counts include all retweets and reply tweets.";
+		d3.select("#bottomtext").html(notes);
+	}
+	
+	alt_data = [];
+	
+	if (meta_data == 0){
+		return;
+	}
+	else if (typeof meta_data == "string"){
+		document.getElementById("errormessage").removeAttribute("hidden"); 
+      	d3.select('#errormessage').html(meta_data);
+	}
+	else{
+		d3.select("#list1choice").attr("value", selected_items[0]);	
+		d3.select("#list5choice").attr("value", selected_items[1]);		
+		d3.select("#list3choice").attr("value", selected_items[2]);		
+		d3.select("#list4choice").attr("value", selected_items[3]);		
+		author = Object.values(data['author']);
+		index = Object.values(data['index']);
+		quantile = Object.values(data['quantile']);
+		type = Object.values(data['type']);
+		value = Object.values(data['value']);
+			
+		data = [];
+		
+		const map_array = new Map();
+		map_array.set('compound', 0);
+		map_array.set('neg', 1);
+		map_array.set('neu', 2);
+		map_array.set('pos', 3);
+		map_array.set('polarity', 4);
+		map_array.set('subjectivity', 5);
+		
+		const map_author = new Map();
+		map_author.set(meta_data[0].author, 0);
+		map_author.set(meta_data[1].author, 1);
+		map_author.set(meta_data[2].author, 2);
+		map_author.set(meta_data[3].author, 3);
+		// possible_values = {'compound': 1, 'neg': 2, 'neu', 'pos', 'polarity', 'subjectivity'];
+		
+		const map_size = new Map([[1, "-1.0"],[2, "-0.9"],[3, "-0.8"],[4, "-0.7"],[5, "-0.6"],[6, "-0.5"], [7, "-0.4"],
+								[8, "-0.3"], [9, "-0.2"], [10, "-0.1"], [11, "0.0"], [12, "0.1"], [13, "0.2"], [14, "0.3"], [15, "0.4"], [16, "0.5"], [17, "0.6"],
+								[18, "0.7"], [19, "0.8"], [20, "0.9"]]);
+		const map_size_2 = new Map([[1, "0.0"],[2, "0.1"],[3, "0.2"],[4, "0.3"],[5, "0.4"],[6, "0.5"], [7, "0.6"],
+								[8, "0.7"], [9, "0.8"], [10, "0.9"]]);
+		for (let i = 0; i < 6; i++){
+			temp = [];
+			temp.push({author: meta_data[0].author});
+			temp.push({author: meta_data[1].author});
+			temp.push({author: meta_data[2].author});
+			temp.push({author: meta_data[3].author});
+			alt_data.push(temp);
+		}	
+		for (let i = 0; i < author.length; i++){
+			data.push({author: author[i], index: index[i], quantile: quantile[i], type: type[i], value: value[i]});
+			var current = alt_data[map_array.get(type[i])][map_author.get(author[i])];
+			var size = Object.keys(current).length;
+			if (type[i] == "compound" || type[i] == "polarity"){
+				current[map_size.get(size)] = value[i];
+			}
+			else{
+				current[map_size_2.get(size)] = value[i];
+			}
+		};
+		d3.select("#chartarea").style("display","");
+		d3.select("#compound").style('background-color', selected);
+		draw_graph(meta_data, alt_data[0], "compound");
+	}
+	
+	d3.select("#compound").on("click", function() {  
+		set_all(unselected);
+		d3.select(this).style('background-color', selected);
+        draw_graph(meta_data, alt_data[0], "compound");
+    });
+    
+    d3.select("#neg").on("click", function() {  
+		set_all(unselected);
+		d3.select(this).style('background-color', selected);
+        draw_graph(meta_data, alt_data[1], "neg");
+    });
+    d3.select("#neu").on("click", function() {  
+		set_all(unselected);
+		d3.select(this).style('background-color', selected);
+        draw_graph(meta_data, alt_data[2], "neu");
+    });
+    d3.select("#pos").on("click", function() {  
+		set_all(unselected);
+		d3.select(this).style('background-color', selected);
+        draw_graph(meta_data, alt_data[3], "pos");
+    });
+    d3.select("#polarity").on("click", function() {
+		set_all(unselected);
+		d3.select(this).style('background-color', selected);
+		draw_graph(meta_data, alt_data[4], "polarity");
+    });
+    d3.select("#subjectivity").on("click", function() {
+		set_all(unselected);
+		d3.select(this).style('background-color', selected);
+        draw_graph(meta_data, alt_data[5], "subjectivity");
+    });
+
+}
+
+
+function validate(text){
+	if (text == "NLTKBaseline" || text == "Baseline"){
+		return "Yes";  
+    }
+	if (text.length <= 5){
+    	return "Invalid query: Not long enough to be a valid query";
+    }
+    if (text.substring(0, 5) != "user:" && text.length <= 6){
+    	return "Invalid query: Not a query";
+    }
+    if (text.substring(0, 5) == "user:"){
+    	rest = text.substring(5);
+        if (rest.length >= 1 && rest.length <= 15){
+        	return "Yes";
+        }
+        else{
+        	return "Invalid username: A username can only contain alphanumeric characters (letters A-Z, numbers 0-9) with the exception of underscores (1-15 characters)";
+        }
+    }
+    if (text.substring(0, 6) == "query:"){
+    	rest = text.substring(6);
+		if (rest == "#"){
+			return "Invalid query: Can't be empty hashtag";
+		}
+        if (rest.includes('"') || rest.includes("'")){
+        	return "Invalid query: Can not contain quotations";
+        }
+        else {
+        	return "Yes";
+        }
+    }
+    else {
+    	return "Invalid query: Not a query";
+    }
+}
+
+
+function submit_form(){
+	var one = document.getElementById("list1choice").value;
+	var two = document.getElementById("list5choice").value;
+	var three = document.getElementById("list3choice").value;
+    var four = document.getElementById("list4choice").value;
+		
+    var one_valid = validate(one);
+    var two_valid = validate(two);
+    var three_valid = validate(three);
+    var four_valid = validate(four);
+    
+    var error_message = "";
+    if (one_valid != "Yes"){
+    	error_message += "Problem with Query One, " + one_valid + "<br>";
+    }
+    if (two_valid != "Yes"){
+    	error_message  += "Problem with Query Two, " + two_valid + "<br>";
+    } 
+    if (three_valid != "Yes"){
+    	error_message  += "Problem with Query Three, " + three_valid + "<br>";
+    }
+    if (four_valid != "Yes"){
+    	error_message  += "Problem with Query Four, " + four_valid + "<br> ";
+    }
+    
+    var myList = [one, two, three, four];
+    var unique = [...new Set(myList)];
+    if (unique.length != 4){
+    	error_message += "At least one query is duplicate from another one. <br>";
+    }
+    if (error_message != ""){
+      	document.getElementById("errormessage").removeAttribute("hidden"); 
+      	d3.select('#errormessage').html(error_message);
+        return false;
+	}
+    else{
+		document.getElementById("errormessage").setAttribute("hidden","hidden");
+        return true;
+    }
+}
+
+
+
+</script>
+</body>
+</html>
