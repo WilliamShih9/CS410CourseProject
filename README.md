@@ -6,3 +6,5 @@ To get the application locally, download the "Project Application" folder, which
 Also, read the documentation if deemed necessary.
 
 Link to presentation (also in text document): https://www.youtube.com/watch?v=iMHCr3-f4bY
+
+UPDATE: The application no longer accepts new queries and will return an error, since the Twitter API is no longer free and costs a minimum of $100 per month. Pre-existing queries from the dropdown menu will still work.
